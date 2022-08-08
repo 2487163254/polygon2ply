@@ -22,8 +22,8 @@ def dep_to_pts_and_mask(depth_img, polygon, fx, cx, cy):
     # dont save max distance in plt, max distance 30 meter
     depth_img[polygon != 255] = 0
     depth_img[depth_img > (30 * 1000.)] = 0
-    print(get_mean_depth(depth_img))
-    print(depth_img[depth_img.nonzero()])
+    # print(get_mean_depth(depth_img))
+    # print(depth_img[depth_img.nonzero()])
     # sns.boxplot(x=depth_img[depth_img.nonzero()])
 
     v, u = np.nonzero(depth_img)
@@ -128,9 +128,9 @@ def process_depth(img_name, mask, label, color, s_plt_path):
     # plt.imshow(depth_img)
     # plt.show()
     depth_img[mask != 255] = 0
-    if label in['tree', 'pole']:
+    if label in['tree', 'pole','pebble', 'pillar']:
         mean_depth = get_mean_depth(depth_img)
-        depth_img[abs(depth_img-mean_depth) > 1000] = 0
+        depth_img[abs(depth_img-mean_depth) > 2000.] = 0
     depth_img[depth_img > (30 * 1000.)] = 0
 
     # plt.imshow(label_polygon)
