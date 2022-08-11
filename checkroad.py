@@ -1,3 +1,7 @@
+import logging
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+logging.basicConfig(filename='debug.log', filemode='w', level=logging.DEBUG, format=LOG_FORMAT)
+# logging.debug("for")
 import copy
 import os
 import random
@@ -11,6 +15,8 @@ from tqdm import tqdm
 from utils import DetectMultiPlanes
 
 DEBUG_MODE = False
+
+
 
 
 def DrawResult(points, colors):
@@ -87,10 +93,12 @@ def main():
     root = os.getcwd()
     data_dir = os.path.join(root, 'debug')
     pcd_lists = os.listdir(data_dir)
+    print(len(pcd_lists))
     goodlist = []
     badlist = []
     needcheck = []
     for filename in tqdm(pcd_lists):
+        logging.debug(f"==========Start Processing: {filename}==========")
         plt_dir = os.path.join(data_dir, filename)
         if DEBUG_MODE:
             print(plt_dir)
@@ -123,18 +131,26 @@ def main():
         planes, colors, plane_nums = findRoadPlane(biggest_pcd)
         if plane_nums == 1:
             goodlist.append(filename)
+            logging.debug(f"Plane Nums: {plane_nums}")
+            logging.debug(f"File Type: GOOD")
         elif plane_nums > 1:
             badlist.append(filename)
+            logging.info(f"Plane Nums: {plane_nums}")
+            logging.info(f"File Type: BAD")
         else:
             needcheck.append(filename)
+            logging.warning(f"Plane Nums: {plane_nums}")
+            logging.warning(f"File Type: NEEDCHECK!!!")
         if DEBUG_MODE:
             DrawResult(planes, colors)
+        logging.debug(f"Finish...")
+    
 
     now = time.time()
     print('Elapsed Time: %d mins' % ((now - start)/60))
     with open('result.yaml', 'w') as f:
         timestr = time.ctime(now)
-        dict = {'runtime': timestr, 'goodlist': goodlist, 'badlist': badlist}
+        dict = {'runtime': timestr, 'goodlist': goodlist, 'badlist': badlist, 'needcheck': needcheck}
         yaml.dump(dict, f)
 
 
