@@ -1,19 +1,36 @@
-import os
-import open3d as o3d
-import numpy as np
-from plane_detection import DetectMultiPlanes
-from utils import DownSample, DrawResult, RemoveNoiseStatistical
-import random
-from tqdm import tqdm
 import copy
-import yaml
+import os
+import random
 import time
 
+import numpy as np
+import open3d as o3d
+import yaml
+from tqdm import tqdm
 
-DEBUG_MODE = True
+from utils import DetectMultiPlanes
+
+DEBUG_MODE = False
+
+
+def DrawResult(points, colors):
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([pcd])
 
 
 def simplifypPcd(pcd, threshold_upper=0.5, threshold_lower=0.31):
+    """simplifypPcd 取出两个阈值中间的pcd
+
+    Args:
+        pcd (o3d.PointCloud): 点云
+        threshold_upper (float, optional): 上限. Defaults to 0.5.
+        threshold_lower (float, optional): 下限. Defaults to 0.31.
+
+    Returns:
+        o3d.PointCloud: 点云
+    """    
     np_points = np.asarray(pcd.points)
     y = np_points[:, 1]
 
@@ -30,13 +47,18 @@ def simplifypPcd(pcd, threshold_upper=0.5, threshold_lower=0.31):
 
 
 def findRoadPlane(pcd):
-    points = np.asarray(pcd.points)
-    points = DownSample(points, voxel_size=0.003)
-    points = RemoveNoiseStatistical(points, nb_neighbors=50, std_ratio=0.5)
+    """findRoadPlane 聚类找出有多少个平面
 
-    #DrawPointCloud(points, color=(0.4, 0.4, 0.4))
-    results = DetectMultiPlanes(
-        points, min_ratio=0.2, threshold=0.03, iterations=3000)
+    Args:
+        pcd (o3d.PointCloud): 点云
+
+    Returns:
+        list: pcd.potins, pcd.colors, plane_nums
+    """    
+    pcd = pcd.voxel_down_sample(voxel_size=0.003)
+    pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+
+    results = DetectMultiPlanes(np.asarray(pcd.points), min_ratio=0.2, threshold=0.03, iterations=3000)
     planes = []
     colors = []
     plane_nums = len(results)
@@ -69,21 +91,21 @@ def main():
     badlist = []
     needcheck = []
     for filename in tqdm(pcd_lists):
-        if filename == 'e8f89ac4-b060-11ec-9d25-7c10c921acb3.ply':
-            break
         plt_dir = os.path.join(data_dir, filename)
-        if DEBUG_MODE: print(plt_dir)
+        if DEBUG_MODE:
+            print(plt_dir)
         pcd = o3d.io.read_point_cloud(plt_dir)
+
         # Search Up
         l = 0.31
         u = 0.5
         original_pcd = copy.copy(pcd)
         pcd = simplifypPcd(original_pcd, u, l)
         biggest_pcd = copy.copy(pcd)
-        while len(pcd.points)!=0:
+        while len(pcd.points) != 0:
             l += 0.1
             u += 0.1
-            pcd =  simplifypPcd(original_pcd, u, l)
+            pcd = simplifypPcd(original_pcd, u, l)
             if len(biggest_pcd.points) < len(pcd.points):
                 biggest_pcd = copy.copy(pcd)
 
@@ -91,10 +113,10 @@ def main():
         l = 0.31
         u = 0.5
         pcd = simplifypPcd(original_pcd, u, l)
-        while len(pcd.points)!=0:
+        while len(pcd.points) != 0:
             l -= 0.1
             u -= 0.1
-            pcd =  simplifypPcd(original_pcd, u, l)
+            pcd = simplifypPcd(original_pcd, u, l)
             if len(biggest_pcd.points) < len(pcd.points):
                 biggest_pcd = copy.copy(pcd)
 
@@ -105,13 +127,14 @@ def main():
             badlist.append(filename)
         else:
             needcheck.append(filename)
-        if DEBUG_MODE: DrawResult(planes, colors)
-    
+        if DEBUG_MODE:
+            DrawResult(planes, colors)
+
     now = time.time()
     print('Elapsed Time: %d mins' % ((now - start)/60))
     with open('result.yaml', 'w') as f:
         timestr = time.ctime(now)
-        dict = {'runtime':timestr, 'goodlist':goodlist, 'badlist':badlist}
+        dict = {'runtime': timestr, 'goodlist': goodlist, 'badlist': badlist}
         yaml.dump(dict, f)
 
 
