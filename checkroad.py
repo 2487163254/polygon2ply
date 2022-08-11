@@ -3,78 +3,117 @@ import open3d as o3d
 import numpy as np
 from plane_detection import DetectMultiPlanes
 from utils import DownSample, DrawResult, RemoveNoiseStatistical
-import time
 import random
+from tqdm import tqdm
+import copy
+import yaml
+import time
 
 
-plt_dir = os.path.join(os.getcwd(), 'export', '0b09f56c-d692-11ec-b9e2-92640e831eb9.ply')
-pcd = o3d.io.read_point_cloud(plt_dir)
-np_points = np.asarray(pcd.points)
-x = np_points[:,0]
-y = np_points[:,1]
-z = np_points[:,2]
-# print(max(x))
-# print(max(y))
-# print(np_points.shape)
-# print(max(z))
-
-y_max = np.where(y <= 0.5)[0]
-pcd = pcd.select_by_index(y_max)
-
-np_points = np.asarray(pcd.points)
-print(len(np_points))
-x = np_points[:,0]
-y = np_points[:,1]
-z = np_points[:,2]
-y_min = np.where(y >= 0.31)[0]
-pcd = pcd.select_by_index(y_min)
+DEBUG_MODE = True
 
 
+def simplifypPcd(pcd, threshold_upper=0.5, threshold_lower=0.31):
+    np_points = np.asarray(pcd.points)
+    y = np_points[:, 1]
+
+    y_max = np.where(y <= threshold_upper)[0]
+    pcd = pcd.select_by_index(y_max)
+
+    np_points = np.asarray(pcd.points)
+
+    y = np_points[:, 1]
+    y_min = np.where(y >= threshold_lower)[0]
+    pcd = pcd.select_by_index(y_min)
+
+    return pcd
 
 
-points = np.asarray(pcd.points)
-points = DownSample(points,voxel_size=0.003)
-points = RemoveNoiseStatistical(points, nb_neighbors=50, std_ratio=0.5)
+def findRoadPlane(pcd):
+    points = np.asarray(pcd.points)
+    points = DownSample(points, voxel_size=0.003)
+    points = RemoveNoiseStatistical(points, nb_neighbors=50, std_ratio=0.5)
 
-#DrawPointCloud(points, color=(0.4, 0.4, 0.4))
-t0 = time.time()
-results = DetectMultiPlanes(points, min_ratio=0.1, threshold=0.015, iterations=3000)
-print('Time:', time.time() - t0)
-planes = []
-colors = []
-for [a, b, c, d], plane in results:
+    #DrawPointCloud(points, color=(0.4, 0.4, 0.4))
+    results = DetectMultiPlanes(
+        points, min_ratio=0.2, threshold=0.03, iterations=3000)
+    planes = []
+    colors = []
+    plane_nums = len(results)
+    for [a, b, c, d], plane in results:
 
-    r = random.random()
-    g = random.random()
-    b = random.random()
-    print(f"Plane equation: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0, with rgb={(r*255, g*255, b*255)}")
+        r = random.random()
+        g = random.random()
+        b = random.random()
+        # print(f"Plane equation: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0, with rgb={(r*255, g*255, b*255)}")
 
-    color = np.zeros((plane.shape[0], plane.shape[1]))
-    color[:, 0] = r
-    color[:, 1] = g
-    color[:, 2] = b
+        color = np.zeros((plane.shape[0], plane.shape[1]))
+        color[:, 0] = r
+        color[:, 1] = g
+        color[:, 2] = b
 
-    planes.append(plane)
-    colors.append(color)
+        planes.append(plane)
+        colors.append(color)
 
-planes = np.concatenate(planes, axis=0)
-colors = np.concatenate(colors, axis=0)
-DrawResult(planes, colors)
+    planes = np.concatenate(planes, axis=0)
+    colors = np.concatenate(colors, axis=0)
+    return planes, colors, plane_nums
 
 
-# np_points = np.asarray(pcd.points)
-# print(len(np_points))
+def main():
+    start = time.time()
+    root = os.getcwd()
+    data_dir = os.path.join(root, 'debug')
+    pcd_lists = os.listdir(data_dir)
+    goodlist = []
+    badlist = []
+    needcheck = []
+    for filename in tqdm(pcd_lists):
+        if filename == 'e8f89ac4-b060-11ec-9d25-7c10c921acb3.ply':
+            break
+        plt_dir = os.path.join(data_dir, filename)
+        if DEBUG_MODE: print(plt_dir)
+        pcd = o3d.io.read_point_cloud(plt_dir)
+        # Search Up
+        l = 0.31
+        u = 0.5
+        original_pcd = copy.copy(pcd)
+        pcd = simplifypPcd(original_pcd, u, l)
+        biggest_pcd = copy.copy(pcd)
+        while len(pcd.points)!=0:
+            l += 0.1
+            u += 0.1
+            pcd =  simplifypPcd(original_pcd, u, l)
+            if len(biggest_pcd.points) < len(pcd.points):
+                biggest_pcd = copy.copy(pcd)
 
-# y = np_points[:,1]
+        # Search Down
+        l = 0.31
+        u = 0.5
+        pcd = simplifypPcd(original_pcd, u, l)
+        while len(pcd.points)!=0:
+            l -= 0.1
+            u -= 0.1
+            pcd =  simplifypPcd(original_pcd, u, l)
+            if len(biggest_pcd.points) < len(pcd.points):
+                biggest_pcd = copy.copy(pcd)
 
-# y_min = np.where(y == min(y))
-# y_max = np.where(y == max(y))
-# print(min(y), max(y))
+        planes, colors, plane_nums = findRoadPlane(biggest_pcd)
+        if plane_nums == 1:
+            goodlist.append(filename)
+        elif plane_nums > 1:
+            badlist.append(filename)
+        else:
+            needcheck.append(filename)
+        if DEBUG_MODE: DrawResult(planes, colors)
+    
+    now = time.time()
+    print('Elapsed Time: %d mins' % ((now - start)/60))
+    with open('result.yaml', 'w') as f:
+        timestr = time.ctime(now)
+        dict = {'runtime':timestr, 'goodlist':goodlist, 'badlist':badlist}
+        yaml.dump(dict, f)
 
-# np_colors = np.asarray(pcd.colors)
-# np_colors[y_min] = (255, 0, 0)
-# np_colors[y_max] = (255, 0, 255)
-# pcd.colors = o3d.utility.Vector3dVector(np_colors)
 
-# print(np_points[y_max], np_points[y_min])
-# o3d.visualization.draw_geometries([pcd])
+if __name__ == "__main__":
+    main()
