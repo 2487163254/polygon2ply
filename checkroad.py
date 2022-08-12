@@ -1,7 +1,7 @@
 import logging
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-logging.basicConfig(filename='debug.log', filemode='w', level=logging.DEBUG, format=LOG_FORMAT)
-# logging.debug("for")
+logging.basicConfig(filename='/result/debug.log', filemode='w', level=logging.DEBUG, format=LOG_FORMAT)
+
 import copy
 import os
 import random
@@ -16,7 +16,12 @@ from utils import DetectMultiPlanes
 
 DEBUG_MODE = False
 
-
+def export(filename, points, colors):
+    save_dir = os.path.join('results', filename)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.io.write_point_cloud(save_dir, pcd)
 
 
 def DrawResult(points, colors):
@@ -98,7 +103,7 @@ def main():
     badlist = []
     needcheck = []
     for filename in tqdm(pcd_lists):
-        logging.debug(f"==========Start Processing: {filename}==========")
+        logging.debug(f"==========Processing: {filename}==========")
         plt_dir = os.path.join(data_dir, filename)
         if DEBUG_MODE:
             print(plt_dir)
@@ -143,12 +148,13 @@ def main():
             logging.warning(f"File Type: NEEDCHECK!!!")
         if DEBUG_MODE:
             DrawResult(planes, colors)
-        logging.debug(f"Finish...")
+        export(filename, planes, colors)
+        logging.debug('Finish...\n')
     
 
     now = time.time()
     print('Elapsed Time: %d mins' % ((now - start)/60))
-    with open('result.yaml', 'w') as f:
+    with open('/result/result.yaml', 'w') as f:
         timestr = time.ctime(now)
         dict = {'runtime': timestr, 'goodlist': goodlist, 'badlist': badlist, 'needcheck': needcheck}
         yaml.dump(dict, f)
