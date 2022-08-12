@@ -1,6 +1,6 @@
 import logging
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-logging.basicConfig(filename='/result/debug.log', filemode='w', level=logging.DEBUG, format=LOG_FORMAT)
+logging.basicConfig(filename='result/debug.log', filemode='w', level=logging.DEBUG, format=LOG_FORMAT)
 
 import copy
 import os
@@ -17,7 +17,7 @@ from utils import DetectMultiPlanes
 DEBUG_MODE = False
 
 def export(filename, points, colors):
-    save_dir = os.path.join('results', filename)
+    save_dir = os.path.join('result', 'ply',filename)
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
     pcd.colors = o3d.utility.Vector3dVector(colors)
